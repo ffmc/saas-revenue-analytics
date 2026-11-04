@@ -31,55 +31,61 @@ Read `brief.md`, `metrics.md` and `source-data.md` before phase 2. They are the 
 
 ---
 
-## Phase 2 — dbt project and sources (week 1, ~5 h)
-**Goal:** a dbt project connected to Snowflake, with every raw table declared as a source.
-
-**Learn first**
-- dbt project structure: https://docs.getdbt.com/best-practices/how-we-structure/1-guide-overview
-- Sources and freshness: https://docs.getdbt.com/docs/build/sources
-
-**Tasks**
-1. `pip install dbt-core dbt-snowflake` in the project venv; `dbt init fieldnote` inside a `dbt/` folder.
-2. `profiles.yml` with two targets. `dev`: your own user, role TRANSFORMER, schema `DEV_<YOURNAME>`. `ci`: DBT_USER with key-pair auth, schema `CI`. Keep `profiles.yml` out of git.
-3. Folders: `models/staging/stripe`, `models/staging/segment`, `models/staging/ecb`, `models/intermediate`, `models/marts`.
-4. `_stripe__sources.yml` etc. declaring every RAW table, with descriptions copied from `source-data.md`.
-5. Freshness on `_LOADED_AT` (warn after 1 day, error after 2) for Stripe and Segment.
-6. Install `dbt_utils` via `packages.yml`.
-
-**Traps**
-- Snowflake uppercases unquoted identifiers. Write source names in lowercase in YAML and let dbt handle the case.
-- Freshness on `_LOADED_AT` measures the pipeline, not the data. Say so in the description.
-
-**Done when:** `dbt debug` passes and `dbt source freshness` runs.
-
-**Interview talking point:** "Sources are documented with the quirks of each feed, so the next person knows about the schema change before they hit it."
-
-## Phase 3 — Staging (weeks 1–2, ~10 h)
-**Goal:** one clean, typed, deduplicated model per source object. No business logic.
+## Phase 2 — Silver notebooks (weeks 1–2, ~10 h)
+**Goal:** one clean, typed, deduplicated table per source object in `SILVER`, built by Snowflake notebooks. No business logic.
 
 **Learn first**
 - Snowflake semi-structured data: `:` path syntax, `::` casts, `LATERAL FLATTEN`: https://docs.snowflake.com/en/sql-reference/functions/flatten
+- Snowflake notebooks in Workspaces: run SQL cells on `TRANSFORMING_WH` as role TRANSFORMER.
 - SQL drills, weeks 1–2: `ROW_NUMBER`, `QUALIFY`, dedup.
 
 **Tasks**
-1. `stg_stripe__customers`, `stg_stripe__subscriptions`, `stg_stripe__invoices`, `stg_stripe__charges`, `stg_stripe__refunds`, `stg_stripe__prices`, `stg_stripe__products`, `stg_stripe__coupons`.
+1. Notebooks live in `snowflake/notebooks/silver/`, one per target table, numbered for run order (`01_stripe_customers.ipynb`, ...). Each reads `RAW`, runs `CREATE OR REPLACE TABLE SILVER.<SOURCE>.<TABLE>`, and ends with assertion cells (see task 7). Clear outputs before committing.
+2. Stripe: `customers`, `subscriptions`, `invoices`, `charges`, `refunds`, `prices`, `products`, `coupons` in `SILVER.STRIPE`.
    - Keep the full history: one row per object per delivery, with a `delivered_on` date parsed from `_FILE`.
    - Remove exact duplicates (same id, same delivery date).
-   - Cast cents to amounts (write a `cents_to_amount` macro), and Unix seconds to `TIMESTAMP_TZ`.
-2. Flatten nested lists into their own models: `stg_stripe__subscription_items` (from `items.data`) and `stg_stripe__invoice_lines` (from `lines.data`).
-3. `stg_segment__tracks`: dedup on `messageId`; keep both `event_at` (`timestamp`) and `received_at`; pull `context.groupId` out as `workspace_id`.
-4. `stg_ecb__rates`: one row per currency and date (dedup across overlapping files); cast `OBS_VALUE` to a number.
-5. Handle the 2025-06-01 schema change in `stg_stripe__customers` with `COALESCE` of the old and new keys into one `acquisition_channel` column.
-6. Tests: `not_null` on ids, `accepted_values` on statuses and currencies, and a `unique` test on the dedup grain (id + delivered_on).
+   - Cast cents to amounts (divide by 100) and Unix seconds to `TIMESTAMP_TZ`.
+3. Flatten nested lists into their own tables: `SILVER.STRIPE.SUBSCRIPTION_ITEMS` (from `items.data`) and `SILVER.STRIPE.INVOICE_LINES` (from `lines.data`).
+4. `SILVER.SEGMENT.TRACKS`: dedup on `messageId`; keep both `event_at` (`timestamp`) and `received_at`; pull `context.groupId` out as `workspace_id`.
+5. `SILVER.ECB.RATES`: one row per currency and date (dedup across overlapping files); cast `OBS_VALUE` to a number.
+6. Handle the 2025-06-01 schema change in the customers notebook with `COALESCE` of the old and new keys into one `acquisition_channel` column.
+7. Assertion cells at the end of each notebook, failing the run if violated: ids not null, statuses and currencies in the expected set, no duplicates on the dedup grain (id + delivered_on).
 
 **Traps**
 - Order history by `delivered_on` then `_FILE_ROW`, never by `_LOADED_AT` (see source-data.md).
 - A customer's channel lives under two different keys depending on when the record was delivered. If you only read the new key, every customer who never changed after June 2025 has a NULL channel.
-- Stripe currency is lowercase and ECB is uppercase. Pick one in staging.
+- Stripe currency is lowercase and ECB is uppercase. Pick one in Silver.
+- `CREATE OR REPLACE` drops grants on the table. That is fine in Silver, which only TRANSFORMER reads, but don't copy the pattern into Gold.
 
-**Done when:** `dbt build -s staging` is green, and a query shows zero customers with a NULL channel.
+**Done when:** every notebook runs top to bottom with no failed assertions, and a query shows zero customers with a NULL channel in `SILVER.STRIPE.CUSTOMERS`.
 
-**Interview talking point:** "Staging keeps the full delivery history because the source re-sends full objects on change. Deciding the current state is a modeling decision, so it doesn't happen in staging."
+**Interview talking point:** "Silver keeps the full delivery history because the source re-sends full objects on change. Deciding the current state is a modeling decision, so it doesn't happen in Silver."
+
+## Phase 3 — dbt project and sources (week 2, ~5 h)
+**Goal:** a dbt project connected to Snowflake, with every Silver table declared as a source and tested.
+
+**Learn first**
+- dbt project structure: https://docs.getdbt.com/best-practices/how-we-structure/1-guide-overview
+- Sources and freshness: https://docs.getdbt.com/docs/build/sources
+- Data tests on sources: https://docs.getdbt.com/docs/build/data-tests
+
+**Tasks**
+1. `pip install dbt-core dbt-snowflake` in the project venv; `dbt init fieldnote` inside a `dbt/` folder.
+2. `profiles.yml` with two targets. `dev`: your own user, role TRANSFORMER, database `GOLD`, schema `DEV_<YOURNAME>`. `ci`: DBT_USER with key-pair auth, database `GOLD`, schema `CI`. Keep `profiles.yml` out of git.
+3. Folders: `models/intermediate`, `models/marts`. There is no staging layer: Silver replaces it.
+4. `_stripe__sources.yml` etc. declaring every `SILVER` table as a source, with descriptions copied from `source-data.md`.
+5. Tests on the sources: `not_null` on ids, `accepted_values` on statuses and currencies, and `unique` on the dedup grain (id + delivered_on). These repeat the notebook assertions so dbt catches a bad Silver rebuild.
+6. Freshness on a load timestamp carried through Silver (warn after 1 day, error after 2) for Stripe and Segment.
+7. Install `dbt_utils` via `packages.yml`.
+
+**Traps**
+- Snowflake uppercases unquoted identifiers. Write source names in lowercase in YAML and let dbt handle the case.
+- Freshness measures the pipeline, not the data. Say so in the description.
+- Lineage starts at Silver, not at RAW. Note in the README that the RAW to Silver step lives in the notebooks.
+
+**Done when:** `dbt debug` passes, `dbt test --select source:*` is green and `dbt source freshness` runs.
+
+**Interview talking point:** "Sources are documented with the quirks of each feed, so the next person knows about the schema change before they hit it. Cleaning runs in notebooks and dbt models start from tested Silver tables."
 
 ## Phase 4 — Subscription history (week 3, ~6 h)
 **Goal:** SCD Type 2 history of every subscription: what plan, seats, price and status it had on any date.
@@ -90,10 +96,10 @@ Read `brief.md`, `metrics.md` and `source-data.md` before phase 2. They are the 
 - SQL drill, week 3: `LEAD`/`LAG`, gaps and islands.
 
 **Tasks**
-1. `int_subscriptions__history`: from staging, take one state per subscription per delivery date and add `valid_from = delivered_on` and `valid_to = LEAD(delivered_on)` (NULL for the current row). Join the item for price, quantity and interval.
+1. `int_subscriptions__history`: from the Silver subscriptions source, take one state per subscription per delivery date and add `valid_from = delivered_on` and `valid_to = LEAD(delivered_on)` (NULL for the current row). Join the subscription items source for price, quantity and interval.
 2. Collapse consecutive rows where nothing relevant changed (status, price, quantity, discount): a gaps-and-islands exercise.
 3. Write a custom generic test, `contiguous_ranges`, that fails if any subscription's `valid_to` doesn't equal its next row's `valid_from`.
-4. **Snapshot exercise:** add a dbt snapshot on `stg_stripe__prices` (check strategy on `active` and `unit_amount`). Then write down why it isn't the main history mechanism here.
+4. **Snapshot exercise:** add a dbt snapshot on the Silver prices source (`SILVER.STRIPE.PRICES`) (check strategy on `active` and `unit_amount`). Then write down why it isn't the main history mechanism here.
 
 **Traps**
 - The raw feed already contains history, because objects are re-delivered on change. A dbt snapshot only records what it sees each time it runs, so on a backfill it would capture just one state per subscription. Building history from the deliveries is the right call; know why.
@@ -146,7 +152,7 @@ Read `brief.md`, `metrics.md` and `source-data.md` before phase 2. They are the 
    - `fct_product_events`: grain event, **incremental** with merge on `message_id` and a 3-day lookback on `received_at` for late events.
 3. Reporting marts: `mart_mrr_bridge` (grain month), `mart_cohort_retention` (grain cohort × months since start: logo, GRR and NRR in constant currency), `mart_trial_funnel`.
 4. Write the grain in every model's YAML description.
-5. Materializations: staging as views, intermediate as ephemeral or views, marts as tables, events incremental.
+5. Materializations: intermediate as ephemeral or views, marts as tables, events incremental.
 
 **Traps**
 - Activation joins Segment to Stripe through `workspace_id`, not a Stripe id.
@@ -188,7 +194,7 @@ Read `brief.md`, `metrics.md` and `source-data.md` before phase 2. They are the 
 3. `+grants: {select: ['REPORTER']}` on marts in `dbt_project.yml`.
 4. `dbt docs generate` and `dbt docs serve`; screenshot the lineage graph for the README.
 
-**Done when:** the lineage graph shows sources → staging → intermediate → marts → exposure, and REPORTER can select from a mart.
+**Done when:** the lineage graph shows Silver sources → intermediate → marts → exposure, and REPORTER can select from a mart.
 
 ## Phase 9 — Semantic layer (week 7, ~8 h)
 **Goal:** every metric in `metrics.md` defined once, in code, for both the dashboard and the AI.
