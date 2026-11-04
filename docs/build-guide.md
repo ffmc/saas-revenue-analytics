@@ -16,7 +16,7 @@ Read `brief.md`, `metrics.md` and `source-data.md` before phase 2. They are the 
 2. Generate two key pairs (README has the commands) and run `snowflake/setup.sql` in a Snowsight worksheet.
 3. Read `setup.sql` top to bottom until you can explain every block.
 
-**Done when:** `SHOW GRANTS TO ROLE TRANSFORMER` lists SELECT on RAW tables and CREATE SCHEMA on ANALYTICS.
+**Done when:** `SHOW GRANTS TO ROLE TRANSFORMER` lists SELECT on RAW tables and CREATE SCHEMA on SILVER and GOLD.
 
 **Interview talking point:** "I separated loading, transforming and reporting into three roles with their own warehouses, so I could see the cost of each and nobody reads raw data from a dashboard. Service users authenticate with key pairs, and a resource monitor suspends warehouses at the credit cap."
 

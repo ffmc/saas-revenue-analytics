@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build guide — SaaS revenue analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700..800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --color-primary:#1A1D19; --color-on-primary:#F3F4F0;
+  --color-surface:#F3F4F0; --color-surface-raised:#FBFBF8; --color-surface-sunken:#E9EBE5;
+  --color-text-primary:#1A1D19; --color-text-secondary:#4F564D; --color-text-muted:#6A7167;
+  --color-border:#D9DCD4; --color-border-strong:#B9BEB3; --color-focus-ring:#345E91; --color-warning:#87620F;
+  --ink-fundamentals:#4A5249; --ink-aggregation:#87620F; --ink-joins:#345E91; --ink-setops:#1F6B6B; --ink-ctes:#7A3E6E;
+  --ink-window:#A4461F; --ink-dates:#4E6B24; --ink-strings:#6B6420; --ink-modeling:#9C3434; --ink-quality:#3F5A6E;
+  --ink-wash-pct:14%;
+  --elevation-sm:0 1px 0 #D9DCD4, 0 6px 16px -10px rgba(26,29,25,0.25);
+  --font-display:"Bricolage Grotesque", ui-sans-serif, sans-serif;
+  --font-body:"IBM Plex Sans", ui-sans-serif, sans-serif;
+  --font-mono:"JetBrains Mono", ui-monospace, monospace;
+  --type-xs-size:0.75rem; --type-sm-size:0.875rem; --type-md-size:1rem; --type-lg-size:1.333rem;
+  --type-xl-size:1.777rem; --type-2xl-size:2.369rem; --type-3xl-size:3.157rem; --type-code-size:0.8125rem;
+  --space-2xs:0.25rem; --space-xs:0.5rem; --space-sm:0.75rem; --space-md:1rem; --space-lg:1.5rem; --space-xl:2.5rem; --space-2xl:4rem;
+  --measure:68ch;
+  --radius-sm:4px; --radius-md:10px; --radius-full:999px;
+  --motion:150ms cubic-bezier(0.2,0,0,1);
+  --hit-area:44px;
+}
+[data-theme="dark"] {
+  --color-primary:#E6E9E3; --color-on-primary:#121513;
+  --color-surface:#121513; --color-surface-raised:#1A1E1B; --color-surface-sunken:#0D0F0E;
+  --color-text-primary:#E6E9E3; --color-text-secondary:#A9B0A5; --color-text-muted:#868D83;
+  --color-border:#2A302B; --color-border-strong:#3B423C; --color-focus-ring:#8FB0DB; --color-warning:#D9AE52;
+  --ink-fundamentals:#B3BCB0; --ink-aggregation:#D9AE52; --ink-joins:#8FB0DB; --ink-setops:#6CC0BC; --ink-ctes:#D095C2;
+  --ink-window:#E58A62; --ink-dates:#9DBF6A; --ink-strings:#C7BD6A; --ink-modeling:#E88A84; --ink-quality:#93B2C9;
+  --elevation-sm:0 1px 0 #2A302B, 0 6px 16px -10px rgba(0,0,0,0.6);
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 88px; }
+body { margin: 0; background: var(--color-surface); color: var(--color-text-primary); font: 400 var(--type-md-size)/1.6 var(--font-body); }
+a { color: var(--ink-joins); text-underline-offset: 2px; }
+code { font: var(--type-code-size)/1.55 var(--font-mono); background: var(--color-surface-sunken); padding: 0.1em 0.35em; border-radius: var(--radius-sm); }
+:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+
+header { position: sticky; top: 0; z-index: 10; background: var(--color-surface); border-bottom: 1px solid var(--color-border); transition: box-shadow var(--motion); }
+header.scrolled { box-shadow: var(--elevation-sm); }
+.bar { max-width: 1200px; margin: 0 auto; padding: var(--space-sm) var(--space-lg); display: flex; align-items: center; gap: var(--space-md); }
+.bar h1 { font: 800 var(--type-lg-size)/1.25 var(--font-display); letter-spacing: -0.01em; margin: 0; white-space: nowrap; }
+.progress { flex: 1; display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
+.track { flex: 1; height: 6px; background: var(--color-surface-sunken); border-radius: var(--radius-full); overflow: hidden; }
+.fill { height: 100%; background: var(--color-primary); width: 0; transition: width var(--motion); }
+.pct { font: 500 var(--type-xs-size)/1.45 var(--font-body); letter-spacing: 0.02em; color: var(--color-text-secondary); white-space: nowrap; }
+button { font: 500 var(--type-sm-size)/1 var(--font-body); color: var(--color-text-primary); background: var(--color-surface-raised); border: 1px solid var(--color-border-strong); border-radius: var(--radius-full); min-height: var(--hit-area); padding: 0 var(--space-md); cursor: pointer; transition: background-color var(--motion); }
+button:hover { background: var(--color-surface-sunken); }
+#theme { width: var(--hit-area); padding: 0; display: grid; place-items: center; }
+
+.layout { max-width: 1200px; margin: 0 auto; padding: var(--space-xl) var(--space-lg) var(--space-2xl); display: grid; grid-template-columns: 240px 1fr; gap: var(--space-xl); }
+nav { position: sticky; top: 96px; align-self: start; max-height: calc(100vh - 120px); overflow-y: auto; }
+nav ol { list-style: none; margin: 0; padding: 0; }
+nav a { display: grid; grid-template-columns: 1.75rem 1fr auto; align-items: center; gap: var(--space-xs); min-height: 36px; padding: 0 var(--space-xs); border-radius: var(--radius-sm); color: var(--color-text-secondary); text-decoration: none; font-size: var(--type-sm-size); }
+nav a:hover { background: var(--color-surface-sunken); color: var(--color-text-primary); }
+nav a.current { color: var(--color-text-primary); font-weight: 600; background: var(--color-surface-sunken); }
+nav .num { font: 400 var(--type-code-size) var(--font-mono); color: var(--ink); }
+nav .count { font-size: var(--type-xs-size); color: var(--color-text-muted); }
+nav a.complete .name { text-decoration: line-through; text-decoration-color: var(--color-border-strong); }
+
+main { min-width: 0; }
+.intro { max-width: var(--measure); margin-bottom: var(--space-xl); }
+.intro h2 { font: 800 var(--type-3xl-size)/0.98 var(--font-display); letter-spacing: -0.035em; margin: 0 0 var(--space-lg); }
+.intro p { color: var(--color-text-secondary); margin: 0 0 var(--space-sm); }
+
+.part { font: 500 var(--type-xs-size)/1.45 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); margin: var(--space-2xl) 0 var(--space-md); padding-top: var(--space-md); border-top: 1px solid var(--color-border); }
+
+details.phase { background: var(--color-surface-raised); border: 1px solid var(--color-border); border-radius: var(--radius-md); margin-bottom: var(--space-lg); }
+details.phase > summary { list-style: none; cursor: pointer; padding: var(--space-lg); display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-md); align-items: baseline; }
+details.phase > summary::-webkit-details-marker { display: none; }
+summary .idx { font: 400 var(--type-code-size) var(--font-mono); color: var(--color-text-muted); }
+summary h3 { font: 800 var(--type-xl-size)/1.15 var(--font-display); letter-spacing: -0.02em; margin: 0; color: var(--ink); }
+summary .meta { display: block; font: 400 var(--type-sm-size)/1.5 var(--font-body); color: var(--color-text-muted); margin-top: var(--space-2xs); letter-spacing: 0; }
+summary .state { font-size: var(--type-xs-size); color: var(--color-text-muted); white-space: nowrap; }
+summary .chev { display: inline-block; margin-left: var(--space-xs); transition: transform var(--motion); }
+details[open] > summary .chev { transform: rotate(90deg); }
+.body { padding: 0 var(--space-lg) var(--space-lg); max-width: calc(var(--measure) + 2 * var(--space-lg)); }
+
+.goal { font-size: var(--type-md-size); margin: 0 0 var(--space-lg); }
+.block { margin-top: var(--space-lg); }
+.label { font: 500 var(--type-xs-size)/1.45 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted); margin: 0 0 var(--space-xs); }
+.block.traps .label { color: var(--color-warning); }
+.block ul, .block ol { margin: 0; padding-left: 1.25rem; }
+.block li { margin-bottom: var(--space-2xs); }
+.block li ul { margin-top: var(--space-2xs); }
+
+ul.tasks { list-style: none; padding: 0; }
+ul.tasks > li { margin-bottom: var(--space-xs); }
+.check { display: grid; grid-template-columns: var(--hit-area) 1fr; align-items: start; cursor: pointer; border-radius: var(--radius-sm); }
+.check input { appearance: none; margin: 0; width: var(--hit-area); height: 28px; display: grid; place-items: center; cursor: pointer; }
+.check input::before { content: ""; width: 18px; height: 18px; border: 1.5px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface); transition: background-color var(--motion), border-color var(--motion); }
+.check input:checked::before { background: var(--color-primary); border-color: var(--color-primary); box-shadow: inset 0 0 0 3px var(--color-surface); }
+.check .text { padding-top: 2px; }
+.check input:checked + .text { color: var(--color-text-muted); }
+.check input:checked + .text > span.main { text-decoration: line-through; text-decoration-color: var(--color-border-strong); }
+.check .text ul { margin: var(--space-2xs) 0 0; padding-left: 1.25rem; }
+.n { font: 400 var(--type-code-size) var(--font-mono); color: var(--color-text-muted); margin-right: var(--space-2xs); }
+
+.block.done { background: var(--color-surface-sunken); border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-sm) var(--space-sm) 0; }
+.block.done .label { padding-left: var(--hit-area); }
+.block.talk { border-top: 1px solid var(--color-border); padding-top: var(--space-md); }
+.block.talk p { margin: 0; font-style: italic; color: var(--color-text-secondary); }
+.block p { margin: 0; }
+
+.flash { animation: flash 1.2s var(--motion); }
+@keyframes flash { from { background: color-mix(in srgb, var(--ink) var(--ink-wash-pct), transparent); } }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: 1fr; }
+  nav { position: static; max-height: none; }
+  .bar h1 { display: none; }
+  .intro h2 { font-size: var(--type-2xl-size); }
+}
+@media print {
+  header, nav { display: none; }
+  .layout { display: block; }
+  details.phase { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<header id="top">
+  <div class="bar">
+    <h1>Build guide</h1>
+    <div class="progress"><div class="track"><div class="fill" id="fill"></div></div><span class="pct" id="pct"></span></div>
+    <button id="next" type="button">Next step</button>
+    <button id="theme" type="button" aria-label="Toggle dark mode"></button>
+  </div>
+</header>
+<div class="layout">
+  <nav aria-label="Phases"><ol id="nav"></ol></nav>
+  <main id="main"></main>
+</div>
+
+<script type="text/plain" id="md"># Build guide
+
+The path from raw tables to a CFO dashboard with AI Q&A. Phases 0–1 are done for you; from phase 2 on, you build. Each phase lists what to learn first, the tasks, the traps, a check you can run, and what you'll say about it in an interview.
+
+At 8 h/week the whole guide is about 10 weeks. Keep the SQL drills and error log from `job-hunting/Context/Study Plan - Analytics Engineer.md` running alongside; the SQL topics below say which week's drills pay off where.
+
+Read `brief.md`, `metrics.md` and `source-data.md` before phase 2. They are the requirements.
+
+---
+
+## Phase 0 — Snowflake account and setup (done for you, 1 h to run)
+**Goal:** a Snowflake account with role-based access, ready to load.
+
+**Tasks**
+1. Create a Snowflake trial: Enterprise edition, AWS. Before choosing the region, check that Cortex Analyst is available there (Snowflake docs, "Cortex Analyst" > availability), because phase 10 needs it.
+2. Generate two key pairs (README has the commands) and run `snowflake/setup.sql` in a Snowsight worksheet.
+3. Read `setup.sql` top to bottom until you can explain every block.
+
+**Done when:** `SHOW GRANTS TO ROLE TRANSFORMER` lists SELECT on RAW tables and CREATE SCHEMA on ANALYTICS.
+
+**Interview talking point:** "I separated loading, transforming and reporting into three roles with their own warehouses, so I could see the cost of each and nobody reads raw data from a dashboard. Service users authenticate with key pairs, and a resource monitor suspends warehouses at the credit cap."
+
+## Phase 1 — Raw load (done for you, 1 h to run)
+**Goal:** all raw tables populated.
+
+**Tasks:** follow the README quickstart: simulator backfill, ECB backfill, `load.py`. Then explore in Snowsight: `SELECT RAW FROM RAW.STRIPE.SUBSCRIPTIONS LIMIT 20`, and click into the JSON.
+
+**Done when:** the row-count query in the README returns non-zero counts for every table.
+
+**Interview talking point:** "Raw lands as VARIANT exactly as delivered, with the file name and row number. Re-running the load is safe because COPY INTO skips files it has already loaded."
+
+---
+
+## Phase 2 — dbt project and sources (week 1, ~5 h)
+**Goal:** a dbt project connected to Snowflake, with every raw table declared as a source.
+
+**Learn first**
+- dbt project structure: https://docs.getdbt.com/best-practices/how-we-structure/1-guide-overview
+- Sources and freshness: https://docs.getdbt.com/docs/build/sources
+
+**Tasks**
+1. `pip install dbt-core dbt-snowflake` in the project venv; `dbt init fieldnote` inside a `dbt/` folder.
+2. `profiles.yml` with two targets. `dev`: your own user, role TRANSFORMER, schema `DEV_<YOURNAME>`. `ci`: DBT_USER with key-pair auth, schema `CI`. Keep `profiles.yml` out of git.
+3. Folders: `models/staging/stripe`, `models/staging/segment`, `models/staging/ecb`, `models/intermediate`, `models/marts`.
+4. `_stripe__sources.yml` etc. declaring every RAW table, with descriptions copied from `source-data.md`.
+5. Freshness on `_LOADED_AT` (warn after 1 day, error after 2) for Stripe and Segment.
+6. Install `dbt_utils` via `packages.yml`.
+
+**Traps**
+- Snowflake uppercases unquoted identifiers. Write source names in lowercase in YAML and let dbt handle the case.
+- Freshness on `_LOADED_AT` measures the pipeline, not the data. Say so in the description.
+
+**Done when:** `dbt debug` passes and `dbt source freshness` runs.
+
+**Interview talking point:** "Sources are documented with the quirks of each feed, so the next person knows about the schema change before they hit it."
+
+## Phase 3 — Staging (weeks 1–2, ~10 h)
+**Goal:** one clean, typed, deduplicated model per source object. No business logic.
+
+**Learn first**
+- Snowflake semi-structured data: `:` path syntax, `::` casts, `LATERAL FLATTEN`: https://docs.snowflake.com/en/sql-reference/functions/flatten
+- SQL drills, weeks 1–2: `ROW_NUMBER`, `QUALIFY`, dedup.
+
+**Tasks**
+1. `stg_stripe__customers`, `stg_stripe__subscriptions`, `stg_stripe__invoices`, `stg_stripe__charges`, `stg_stripe__refunds`, `stg_stripe__prices`, `stg_stripe__products`, `stg_stripe__coupons`.
+   - Keep the full history: one row per object per delivery, with a `delivered_on` date parsed from `_FILE`.
+   - Remove exact duplicates (same id, same delivery date).
+   - Cast cents to amounts (write a `cents_to_amount` macro), and Unix seconds to `TIMESTAMP_TZ`.
+2. Flatten nested lists into their own models: `stg_stripe__subscription_items` (from `items.data`) and `stg_stripe__invoice_lines` (from `lines.data`).
+3. `stg_segment__tracks`: dedup on `messageId`; keep both `event_at` (`timestamp`) and `received_at`; pull `context.groupId` out as `workspace_id`.
+4. `stg_ecb__rates`: one row per currency and date (dedup across overlapping files); cast `OBS_VALUE` to a number.
+5. Handle the 2025-06-01 schema change in `stg_stripe__customers` with `COALESCE` of the old and new keys into one `acquisition_channel` column.
+6. Tests: `not_null` on ids, `accepted_values` on statuses and currencies, and a `unique` test on the dedup grain (id + delivered_on).
+
+**Traps**
+- Order history by `delivered_on` then `_FILE_ROW`, never by `_LOADED_AT` (see source-data.md).
+- A customer's channel lives under two different keys depending on when the record was delivered. If you only read the new key, every customer who never changed after June 2025 has a NULL channel.
+- Stripe currency is lowercase and ECB is uppercase. Pick one in staging.
+
+**Done when:** `dbt build -s staging` is green, and a query shows zero customers with a NULL channel.
+
+**Interview talking point:** "Staging keeps the full delivery history because the source re-sends full objects on change. Deciding the current state is a modeling decision, so it doesn't happen in staging."
+
+## Phase 4 — Subscription history (week 3, ~6 h)
+**Goal:** SCD Type 2 history of every subscription: what plan, seats, price and status it had on any date.
+
+**Learn first**
+- Kimball slowly changing dimensions (Type 2).
+- dbt snapshots: https://docs.getdbt.com/docs/build/snapshots
+- SQL drill, week 3: `LEAD`/`LAG`, gaps and islands.
+
+**Tasks**
+1. `int_subscriptions__history`: from staging, take one state per subscription per delivery date and add `valid_from = delivered_on` and `valid_to = LEAD(delivered_on)` (NULL for the current row). Join the item for price, quantity and interval.
+2. Collapse consecutive rows where nothing relevant changed (status, price, quantity, discount): a gaps-and-islands exercise.
+3. Write a custom generic test, `contiguous_ranges`, that fails if any subscription's `valid_to` doesn't equal its next row's `valid_from`.
+4. **Snapshot exercise:** add a dbt snapshot on `stg_stripe__prices` (check strategy on `active` and `unit_amount`). Then write down why it isn't the main history mechanism here.
+
+**Traps**
+- The raw feed already contains history, because objects are re-delivered on change. A dbt snapshot only records what it sees each time it runs, so on a backfill it would capture just one state per subscription. Building history from the deliveries is the right call; know why.
+- State is end of day: a subscription delivered on 2025-03-14 is in that state for the rest of that day.
+
+**Done when:** for one subscription you pick by hand, the history rows tell its full story (trial, active, upgrade, past_due, canceled), and `contiguous_ranges` passes.
+
+**Interview talking point:** "I didn't use a snapshot for subscriptions, because the extract already re-delivers full state on every change, and a snapshot would miss everything before its first run. I built SCD2 from delivery history and used a snapshot only where a source overwrites in place."
+
+## Phase 5 — MRR spine and movements (weeks 3–4, ~10 h)
+**Goal:** the core of the project. MRR per customer per month end, and the movement classification.
+
+**Learn first**
+- `metrics.md`, every word of the MRR section.
+- SQL drill, week 4: date spines, cohorts.
+
+**Tasks**
+1. `int_month_ends`: one row per month end from 2024-01 to the last complete month (`dbt_utils.date_spine` or a generator).
+2. `int_customer_mrr__monthly`: join the month ends to `int_subscriptions__history` where the month end falls inside `[valid_from, valid_to)`. Apply the MRR rules: status filter, annual / 12, discount active at month end, round per customer.
+3. Densify: customers need a row with MRR 0 in months after they churn, or you can't detect churn. Build the customer × month grid from first paid month to the last month.
+4. `int_mrr_movements`: compare with `LAG(mrr)`. Classify new, reactivation, expansion, contraction, churn, retained. Reactivation needs "had MRR at any earlier month" (a running `MAX` over previous rows).
+5. `int_fx__month_end_rates`: for each month end and currency, the last ECB rate on or before that date. Weekends and 1 January have no rate.
+
+**Traps**
+- Annual plans: MRR is the yearly amount / 12, every month. Don't put the annual invoice into one month.
+- Past-due subscriptions still count. Trialing ones don't.
+- The `WELCOME20` discount starts at subscription creation, during the trial, so a customer may get only 2 months of it after paying.
+- Grandfathered prices: use the price on the subscription item, not the current list price.
+- A customer can churn and come back on a new subscription id. MRR is per customer, not per subscription.
+
+**Done when:** for every month, `start MRR + new + reactivation + expansion − contraction − churn = end MRR` in native currency (write it as a query first; it becomes a test in phase 7).
+
+**Interview talking point:** "MRR is a point-in-time measure, so I built a customer × month-end spine from SCD2 subscription history instead of summing invoices. Invoices answer a different question: cash. And I densified to zero after churn, because you can't classify churn from rows that don't exist."
+
+## Phase 6 — Marts (week 5, ~8 h)
+**Goal:** the star schema the dashboard and semantic layer read.
+
+**Learn first**
+- Kimball: grain, fact table types, conformed dimensions.
+- Incremental models: https://docs.getdbt.com/docs/build/incremental-models
+
+**Tasks**
+1. Dimensions:
+   - `dim_customers`: country, currency, acquisition channel, signup date, cohort month, activation flag (from Segment, rules in metrics.md), current plan.
+   - `dim_plans` and `dim_dates`.
+2. Facts:
+   - `fct_mrr_monthly`: grain customer × month end. Native MRR, EUR MRR at that month's rate, movement, movement amount.
+   - `fct_invoices`: grain invoice, latest state.
+   - `fct_payment_attempts`: grain charge, with a first-attempt flag and recovered flag.
+   - `fct_product_events`: grain event, **incremental** with merge on `message_id` and a 3-day lookback on `received_at` for late events.
+3. Reporting marts: `mart_mrr_bridge` (grain month), `mart_cohort_retention` (grain cohort × months since start: logo, GRR and NRR in constant currency), `mart_trial_funnel`.
+4. Write the grain in every model's YAML description.
+5. Materializations: staging as views, intermediate as ephemeral or views, marts as tables, events incremental.
+
+**Traps**
+- Activation joins Segment to Stripe through `workspace_id`, not a Stripe id.
+- The incremental lookback must use `received_at`, not `event_at`, or late events never arrive.
+- Constant currency for NRR and GRR: convert both months at the later month's rate.
+
+**Done when:** `dbt build` is green and the trial funnel shows about 15% conversion for unactivated and about 50% for activated accounts.
+
+**Interview talking point:** "The events fact is incremental with a three-day lookback on received time, because about 3% of events arrive late; partitioning by event time would silently drop them."
+
+## Phase 7 — Tests and reconciliation (week 6, ~6 h)
+**Goal:** the pipeline stops itself before showing wrong numbers.
+
+**Learn first:** data tests, generic and singular: https://docs.getdbt.com/docs/build/data-tests
+
+**Tasks**
+1. Generic tests on every mart: `unique` and `not_null` on keys, `relationships` from facts to dimensions, `accepted_values` on movement.
+2. `dbt_utils.expression_is_true`: MRR ≥ 0; EUR MRR ≥ 0.
+3. Singular test `assert_mrr_bridge_closes`: the phase 5 query; fails on any month where the bridge is off by more than 0.01.
+4. Singular test `assert_mrr_matches_ground_truth`: compare `fct_mrr_monthly` (native currency) with `RAW.GROUND_TRUTH.MRR_MONTHLY`, joined on month and customer, full outer join. It fails on any difference. Declare the ground truth as a source, and use it **only** here.
+5. Test severity: the ground-truth test is `error`; volume anomalies can be `warn`.
+
+**Traps**
+- A full outer join is essential: missing customers on either side are failures too.
+- If the reconciliation fails, the bug is almost always in one of the phase 5 traps. Pick one failing customer and trace their raw subscription history by hand.
+
+**Done when:** `dbt build` is green including both singular tests, and you broke something on purpose (for example, remove the discount logic) to watch the reconciliation test fail.
+
+**Interview talking point:** "MRR reconciles to the cent against an independent answer key every run. When I removed the discount logic on purpose, the test caught it immediately, which is how I know the test works."
+
+## Phase 8 — Documentation and grants (week 6, ~3 h)
+**Goal:** a docs site someone else can navigate, and production access controlled by dbt.
+
+**Learn first:** exposures (https://docs.getdbt.com/docs/build/exposures) and grants (https://docs.getdbt.com/reference/resource-configs/grants).
+
+**Tasks**
+1. Descriptions for every mart model and column; reuse long ones with doc blocks (`{% docs %}`).
+2. An exposure for the Streamlit app (phase 10) listing the marts it reads.
+3. `+grants: {select: ['REPORTER']}` on marts in `dbt_project.yml`.
+4. `dbt docs generate` and `dbt docs serve`; screenshot the lineage graph for the README.
+
+**Done when:** the lineage graph shows sources → staging → intermediate → marts → exposure, and REPORTER can select from a mart.
+
+## Phase 9 — Semantic layer (week 7, ~8 h)
+**Goal:** every metric in `metrics.md` defined once, in code, for both the dashboard and the AI.
+
+**Learn first**
+- MetricFlow: https://docs.getdbt.com/docs/build/about-metricflow, semantic models (https://docs.getdbt.com/docs/build/semantic-models), metrics (https://docs.getdbt.com/docs/build/metrics-overview), time spine (https://docs.getdbt.com/docs/build/metricflow-time-spine).
+- Cortex Analyst semantic models or semantic views (Snowflake docs, "Cortex Analyst").
+
+**Tasks**
+1. `pip install dbt-metricflow`; add the required time spine model.
+2. Semantic models on `fct_mrr_monthly`, `dim_customers` and `mart_trial_funnel`.
+3. Metrics: `mrr_eur`, `new_mrr`, `expansion_mrr`, `contraction_mrr`, `churned_mrr`, `paying_customers`, `logo_churn_rate` (ratio), `arpa` (ratio), `trial_conversion_rate` (ratio).
+4. Query them: `mf query --metrics mrr_eur --group-by metric_time__month`.
+5. Write the Cortex Analyst semantic model (YAML on a stage, or a semantic view) over the same marts and metrics. Add 10 verified queries: the brief's questions with hand-checked SQL.
+
+**Traps**
+- NRR and GRR are cohort ratios that don't fit simple metric types well. Expose them from `mart_cohort_retention` as measures there, rather than forcing them into a derived metric that is subtly wrong.
+- Two definitions of the same metric (MetricFlow and Cortex) can drift. Keep the names identical and test both against the same queries.
+
+**Done when:** `mf query` matches the marts for 3 metrics, and Cortex Analyst answers your 10 verified questions correctly.
+
+**Interview talking point:** "Metrics are defined once in the semantic layer, and the AI only answers from those definitions, so it can't invent its own version of churn."
+
+## Phase 10 — Streamlit app with AI (week 8, ~8 h)
+**Goal:** the CFO's dashboard, one page per brief objective, plus Ask the data.
+
+**Learn first:** Streamlit in Snowflake (Snowflake docs, "Streamlit in Snowflake"), and the Cortex Analyst REST API from Streamlit.
+
+**Tasks**
+1. Create the app in Snowsight with the REPORTER role and REPORTING_WH. Grant REPORTER the `SNOWFLAKE.CORTEX_USER` database role.
+2. Pages:
+   - MRR bridge (objective 1)
+   - Retention cohorts heatmap (2)
+   - Churn drivers (3)
+   - Funnel and unit economics (4)
+   - Payments and involuntary churn (5)
+   - Ask the data (6), showing the question, the generated SQL and the result
+3. Styling: take colours and type from the Query Ink tokens (`sql-dbt-trainning/design_system/tokens.css`). Streamlit theming covers the basics; keep charts to one ink colour per metric family.
+4. Every number on screen comes from a mart or a semantic-layer metric. No SQL inside the app that redefines a metric.
+
+**Done when:** each brief objective 1–6 has a page that answers it, and the MRR on screen matches the ground truth for the latest month.
+
+## Phase 11 — Automation and CI (week 9, ~6 h)
+**Goal:** daily refresh with nobody touching it, and no broken model reaching production.
+
+**Learn first:** GitHub Actions basics; dbt `state:modified` selection (optional).
+
+**Tasks**
+1. Push the repo to GitHub (public). Add secrets: account, both private keys.
+2. `.github/workflows/daily.yml` on a schedule:
+   - `simulate.py` (no flags = yesterday), `fx.py`, `load.py`
+   - `dbt build --target prod`, then `dbt source freshness`
+   - on failure, open a GitHub issue (or email)
+3. `.github/workflows/ci.yml` on pull requests: `sqlfluff lint` (dbt templater) and `dbt build --target ci`.
+4. `.github/workflows/docs.yml`: `dbt docs generate` and publish `target/` to GitHub Pages.
+
+**Traps**
+- The simulator replays from 2024 every run (a few seconds), and only writes yesterday's files. If a day is missed, run it once with `--backfill`; the loader skips files already loaded.
+- Never commit keys. Write the key from a secret to a temp file in the workflow.
+
+**Done when:** 3 scheduled runs succeed unattended, and a PR with a deliberately failing test is blocked.
+
+## Phase 12 — Showcase (week 10, ~5 h)
+**Goal:** someone can understand the project in five minutes without running anything.
+
+**Tasks**
+1. README:
+   - the business problem (from the brief), architecture diagram, lineage screenshot
+   - each brief objective and where it's met
+   - design decisions: grain, SCD2 from deliveries, incremental lookback, constant-currency NRR, reconciliation
+   - what is simulated, and what you'd do next
+2. A 2–3 minute demo video: the MRR bridge, a cohort, one Ask the data question with its SQL.
+3. Decide what happens after the trial: pay-as-you-go with auto-suspend (likely a few euros a month), or freeze it with the video and hosted docs as proof.
+4. Add the project to `job-hunting/Context/Master.xlsx` first, then to the Analytics Engineer CV, following the bullet rules (ownership verb, scope, no invented metrics). Re-run `/ats-scoring` on a current posting to see the dbt and testing gaps move.
+
+**Done when:** a friend who hasn't seen it can explain what it does after reading the README.
+</script>
+<script>
+const INKS = ["fundamentals","fundamentals","setops","fundamentals","window","dates","modeling","quality","strings","ctes","joins","setops","aggregation"];
+const KEY = "build-guide-progress";
+const state = JSON.parse(localStorage.getItem(KEY) || "{}");
+const save = () => localStorage.setItem(KEY, JSON.stringify(state));
+
+const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+function inline(s) {
+  const codes = [];
+  s = esc(s).replace(/`([^`]+)`/g, (_, c) => `\u0000${codes.push(c) - 1}\u0000`);
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/https?:\/\/[^\s),]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u.replace(/^https?:\/\/(www\.)?/, "")}</a>`);
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[i]}</code>`);
+}
+
+function parseBlocks(lines) {
+  const blocks = [];
+  let cur = null;
+  for (const raw of lines) {
+    if (!raw.trim()) { cur = null; continue; }
+    const top = raw.match(/^(\d+\.|-) (.*)$/);
+    const sub = raw.match(/^\s+- (.*)$/);
+    if (top) {
+      if (!cur || cur.type !== "list") { cur = { type: "list", ordered: top[1] !== "-", items: [] }; blocks.push(cur); }
+      cur.items.push({ text: top[2], sub: [] });
+    } else if (sub && cur && cur.type === "list") {
+      cur.items[cur.items.length - 1].sub.push(sub[1]);
+    } else {
+      const lab = raw.match(/^\*\*([^*]+?):?\*\*:?\s*(.*)$/);
+      if (lab) { cur = { type: "labeled", label: lab[1].replace(/:$/, ""), text: lab[2] }; blocks.push(cur); if (!lab[2]) cur.wantsList = true; }
+      else if (cur && cur.type === "para") cur.text += " " + raw.trim();
+      else { cur = { type: "para", text: raw.trim() }; blocks.push(cur); }
+    }
+  }
+  const out = [];
+  for (const b of blocks) {
+    const prev = out[out.length - 1];
+    if (b.type === "list" && prev && prev.wantsList && !prev.list) { prev.list = b; continue; }
+    out.push(b);
+  }
+  return out;
+}
+
+function checkbox(id, html) {
+  return `<label class="check"><input type="checkbox" data-id="${id}"${state[id] ? " checked" : ""}><span class="text">${html}</span></label>`;
+}
+
+function renderList(list, pid, asTasks) {
+  if (!asTasks) {
+    const tag = list.ordered ? "ol" : "ul";
+    return `<${tag}>${list.items.map(i => `<li>${inline(i.text)}${i.sub.length ? `<ul>${i.sub.map(s => `<li>${inline(s)}</li>`).join("")}</ul>` : ""}</li>`).join("")}</${tag}>`;
+  }
+  return `<ul class="tasks">${list.items.map((i, n) => {
+    const sub = i.sub.length ? `<ul>${i.sub.map(s => `<li>${inline(s)}</li>`).join("")}</ul>` : "";
+    return `<li>${checkbox(`${pid}-t${n}`, `<span class="main"><span class="n">${n + 1}.</span>${inline(i.text)}</span>${sub}`)}</li>`;
+  }).join("")}</ul>`;
+}
+
+function renderPhase(heading, lines, pid) {
+  const m = heading.match(/^Phase (\d+) — (.+?)(?: \((.+)\))?$/);
+  const num = +m[1];
+  let goal = "", body = "";
+  for (const b of parseBlocks(lines)) {
+    if (b.type === "para") { body += `<div class="block"><p>${inline(b.text)}</p></div>`; continue; }
+    if (b.type === "list") { body += `<div class="block">${renderList(b, pid, false)}</div>`; continue; }
+    const L = b.label;
+    if (L === "Goal") { goal = `<p class="goal">${inline(b.text)}</p>`; continue; }
+    if (L === "Tasks") {
+      const content = b.list ? renderList(b.list, pid, true) : `<ul class="tasks"><li>${checkbox(`${pid}-t0`, `<span class="main">${inline(b.text)}</span>`)}</li></ul>`;
+      body += `<div class="block"><p class="label">Tasks</p>${content}</div>`;
+    } else if (L === "Done when") {
+      body += `<div class="block done"><p class="label">Done when</p>${checkbox(`${pid}-done`, `<span class="main">${inline(b.text)}</span>`)}</div>`;
+    } else if (L.startsWith("Interview")) {
+      body += `<div class="block talk"><p class="label">Interview talking point</p><p>${inline(b.text)}</p></div>`;
+    } else {
+      const cls = L === "Traps" ? "traps" : "";
+      body += `<div class="block ${cls}"><p class="label">${esc(L)}</p>${b.text ? `<p>${inline(b.text)}</p>` : ""}${b.list ? renderList(b.list, pid, false) : ""}</div>`;
+    }
+  }
+  return { num, title: m[2], meta: m[3] || "", html: goal + body };
+}
+
+const md = document.getElementById("md").textContent.trim().split("\n");
+const main = document.getElementById("main");
+const nav = document.getElementById("nav");
+const sections = [];
+let introLines = [], cur = null, partBreak = false;
+for (const line of md) {
+  if (line.startsWith("# ")) continue;
+  if (line.startsWith("## ")) { cur = { heading: line.slice(3), lines: [], partBreak }; sections.push(cur); partBreak = false; continue; }
+  if (line.trim() === "---") { if (cur) partBreak = true; continue; }
+  (cur ? cur.lines : introLines).push(line);
+}
+
+main.innerHTML = `<section class="intro"><h2>From raw tables to a CFO dashboard</h2>${parseBlocks(introLines).map(b => `<p>${inline(b.text)}</p>`).join("")}</section>`;
+sections.forEach((s, i) => {
+  const pid = `p${i}`;
+  const p = renderPhase(s.heading, s.lines, pid);
+  const ink = `var(--ink-${INKS[p.num] || "fundamentals"})`;
+  if (s.partBreak) main.insertAdjacentHTML("beforeend", `<p class="part">You build</p>`);
+  else if (i === 0) main.insertAdjacentHTML("beforeend", `<p class="part">Done for you</p>`);
+  main.insertAdjacentHTML("beforeend",
+    `<details class="phase" id="${pid}" style="--ink:${ink}"><summary><span class="idx">${String(p.num).padStart(2, "0")}</span><span><h3>${esc(p.title)}</h3>${p.meta ? `<span class="meta">${esc(p.meta)}</span>` : ""}</span><span class="state"><span data-count="${pid}"></span><span class="chev" aria-hidden="true">›</span></span></summary><div class="body">${p.html}</div></details>`);
+  nav.insertAdjacentHTML("beforeend",
+    `<li><a href="#${pid}" data-nav="${pid}" style="--ink:${ink}"><span class="num">${String(p.num).padStart(2, "0")}</span><span class="name">${esc(p.title)}</span><span class="count" data-count="${pid}"></span></a></li>`);
+});
+
+const phases = [...document.querySelectorAll("details.phase")];
+function phaseBoxes(d) { return [...d.querySelectorAll("input[type=checkbox]")]; }
+function update() {
+  let all = 0, done = 0;
+  phases.forEach(d => {
+    const boxes = phaseBoxes(d), n = boxes.filter(b => b.checked).length;
+    all += boxes.length; done += n;
+    document.querySelectorAll(`[data-count="${d.id}"]`).forEach(el => el.textContent = `${n}/${boxes.length}`);
+    document.querySelector(`[data-nav="${d.id}"]`).classList.toggle("complete", n === boxes.length);
+  });
+  document.getElementById("fill").style.width = `${(done / all) * 100}%`;
+  document.getElementById("pct").textContent = `${done} of ${all} steps`;
+  const first = phases.find(d => phaseBoxes(d).some(b => !b.checked));
+  document.querySelectorAll("nav a").forEach(a => a.classList.toggle("current", first && a.dataset.nav === first.id));
+}
+phases.forEach(d => { d.open = phaseBoxes(d).some(b => !b.checked) && d === phases.find(x => phaseBoxes(x).some(b => !b.checked)); });
+main.addEventListener("change", e => {
+  if (!e.target.dataset.id) return;
+  e.target.checked ? state[e.target.dataset.id] = 1 : delete state[e.target.dataset.id];
+  save(); update();
+});
+nav.addEventListener("click", e => { const a = e.target.closest("a"); if (a) document.getElementById(a.dataset.nav).open = true; });
+document.getElementById("next").addEventListener("click", () => {
+  const box = document.querySelector("details.phase input[type=checkbox]:not(:checked)");
+  if (!box) return;
+  const d = box.closest("details"); d.open = true;
+  const row = box.closest("li, .block");
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  row.classList.remove("flash"); void row.offsetWidth; row.classList.add("flash");
+  row.style.setProperty("--ink", getComputedStyle(d).getPropertyValue("--ink"));
+});
+
+const root = document.documentElement, themeBtn = document.getElementById("theme");
+const sun = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+const moon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+function setTheme(t) { root.dataset.theme = t; themeBtn.innerHTML = t === "dark" ? sun : moon; }
+setTheme(localStorage.getItem("theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+themeBtn.addEventListener("click", () => { const t = root.dataset.theme === "dark" ? "light" : "dark"; localStorage.setItem("theme", t); setTheme(t); });
+addEventListener("scroll", () => document.getElementById("top").classList.toggle("scrolled", scrollY > 4), { passive: true });
+update();
+</script>
+</body>
+</html>
