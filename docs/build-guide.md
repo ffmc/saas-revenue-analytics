@@ -40,7 +40,7 @@ Read `brief.md`, `metrics.md` and `source-data.md` before phase 2. They are the 
 - SQL drills, weeks 1–2: `ROW_NUMBER`, `QUALIFY`, dedup.
 
 **Tasks**
-1. Notebooks live in `snowflake/notebooks/silver/`, one per target table, numbered for run order (`01_stripe_customers.ipynb`, ...). Each reads `RAW`, runs `CREATE OR REPLACE TABLE SILVER.<SOURCE>.<TABLE>`, and ends with assertion cells (see task 7). Clear outputs before committing.
+1. One notebook, `snowflake/notebooks/silver/silver.ipynb`, builds every table in dependency order. Each table section reads `RAW`, runs `CREATE OR REPLACE TABLE SILVER.<SOURCE>.<TABLE>`, and is followed by a check cell (see task 7). Clear outputs before committing.
 2. Stripe: `customers`, `subscriptions`, `invoices`, `charges`, `refunds`, `prices`, `products`, `coupons` in `SILVER.STRIPE`.
    - Keep the full history: one row per object per delivery, with a `delivered_on` date parsed from `_FILE`.
    - Remove exact duplicates (same id, same delivery date).
@@ -49,7 +49,7 @@ Read `brief.md`, `metrics.md` and `source-data.md` before phase 2. They are the 
 4. `SILVER.SEGMENT.TRACKS`: dedup on `messageId`; keep both `event_at` (`timestamp`) and `received_at`; pull `context.groupId` out as `workspace_id`.
 5. `SILVER.ECB.RATES`: one row per currency and date (dedup across overlapping files); cast `OBS_VALUE` to a number.
 6. Handle the 2025-06-01 schema change in the customers notebook with `COALESCE` of the old and new keys into one `acquisition_channel` column.
-7. Assertion cells at the end of each notebook, failing the run if violated: ids not null, statuses and currencies in the expected set, no duplicates on the dedup grain (id + delivered_on).
+7. A check cell after each table, failing the run if violated: ids not null, statuses and currencies in the expected set, no duplicates on the dedup grain (id + delivered_on).
 
 **Traps**
 - Order history by `delivered_on` then `_FILE_ROW`, never by `_LOADED_AT` (see source-data.md).
@@ -57,7 +57,7 @@ Read `brief.md`, `metrics.md` and `source-data.md` before phase 2. They are the 
 - Stripe currency is lowercase and ECB is uppercase. Pick one in Silver.
 - `CREATE OR REPLACE` drops grants on the table. That is fine in Silver, which only TRANSFORMER reads, but don't copy the pattern into Gold.
 
-**Done when:** every notebook runs top to bottom with no failed assertions, and a query shows zero customers with a NULL channel in `SILVER.STRIPE.CUSTOMERS`.
+**Done when:** the notebook runs top to bottom with no failed checks, and a query shows zero customers with a NULL channel in `SILVER.STRIPE.CUSTOMERS`.
 
 **Interview talking point:** "Silver keeps the full delivery history because the source re-sends full objects on change. Deciding the current state is a modeling decision, so it doesn't happen in Silver."
 
@@ -71,7 +71,7 @@ Read `brief.md`, `metrics.md` and `source-data.md` before phase 2. They are the 
 
 **Tasks**
 1. `pip install dbt-core dbt-snowflake` in the project venv; `dbt init fieldnote` inside a `dbt/` folder.
-2. `profiles.yml` with two targets. `dev`: your own user, role TRANSFORMER, database `GOLD`, schema `DEV_<YOURNAME>`. `ci`: DBT_USER with key-pair auth, database `GOLD`, schema `CI`. Keep `profiles.yml` out of git.
+2. `profiles.yml` with two targets. `dev`: your own user, role TRANSFORMER, database `GOLD`, schema `DBT_<INITIAL><LASTNAME>` (e.g. `DBT_FCARDOSO`). `ci`: DBT_USER with key-pair auth, database `GOLD`, schema `CI`. Keep `profiles.yml` out of git.
 3. Folders: `models/intermediate`, `models/marts`. There is no staging layer: Silver replaces it.
 4. `_stripe__sources.yml` etc. declaring every `SILVER` table as a source, with descriptions copied from `source-data.md`.
 5. Tests on the sources: `not_null` on ids, `accepted_values` on statuses and currencies, and `unique` on the dedup grain (id + delivered_on). These repeat the notebook assertions so dbt catches a bad Silver rebuild.
