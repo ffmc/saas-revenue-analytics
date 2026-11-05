@@ -1,0 +1,21 @@
+name: fieldnote
+version: "1.0.0"
+profile: fieldnote
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+snapshot-paths: ["snapshots"]
+seed-paths: ["seeds"]
+analysis-paths: ["analyses"]
+
+clean-targets:
+  - target
+  - dbt_packages
+
+models:
+  fieldnote:
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table

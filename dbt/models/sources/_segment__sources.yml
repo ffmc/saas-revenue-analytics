@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: segment
+    description: Simulated Segment product events, deduplicated on messageId in Silver.
+    database: silver
+    schema: segment
+    tables:
+      - name: tracks
+        description: One row per event. About 3% arrive 1 to 3 days late, so received_at can be later than event_at. workspace_id joins to Stripe customer metadata.workspace_id.

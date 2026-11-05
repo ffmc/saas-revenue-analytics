@@ -1,0 +1,28 @@
+version: 2
+
+sources:
+  - name: stripe
+    description: Simulated Stripe billing objects, cleaned in Silver by the snowflake/notebooks/silver notebooks. Full delivery history, one row per object per delivery date.
+    database: silver
+    schema: stripe
+    tables:
+      - name: customers
+        description: One row per customer per delivery. The acquisition channel moved from metadata.acquisition_channel to metadata.signup_channel on 2025-06-01; Silver coalesces both into acquisition_channel.
+      - name: subscriptions
+        description: One row per subscription per delivery. Free to paid moves are updates to the same subscription. Trials last 14 days.
+      - name: subscription_items
+        description: Flattened from subscriptions items.data. Price, quantity and interval per subscription per delivery. Grandfathered subscriptions reference inactive prices.
+      - name: invoices
+        description: One row per invoice per delivery. total_excluding_tax exists only from 2025-06-01.
+      - name: invoice_lines
+        description: Flattened from invoices lines.data. Prorations produce a negative line for unused time and a positive line for the new price.
+      - name: charges
+        description: One row per charge per delivery. Failed charges are retried 3, 7 and 14 days after the first failure. Refunds set refunded = true.
+      - name: refunds
+        description: One row per refund.
+      - name: products
+        description: One row per product.
+      - name: prices
+        description: One row per price per delivery. Annual prices have interval = year and a yearly unit amount per seat. Pro prices increased on 2025-03-01; old prices became inactive.
+      - name: coupons
+        description: One row per coupon. WELCOME20 is 20% for 3 months from subscription creation; PARTNER10 is 10% forever.

@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: ecb
+    description: Real ECB exchange rates, deduplicated across overlapping extract files in Silver.
+    database: silver
+    schema: ecb
+    tables:
+      - name: rates
+        description: One row per currency per business day, in units of currency per 1 EUR. No rates on weekends and TARGET holidays.
