@@ -6,18 +6,37 @@ The raw billing and product data lands in Snowflake, dbt cleans, models and test
 
 **Status: in progress.** Done so far: Snowflake setup, raw data load, a cleaned layer and the dbt project connected to it. Next: the revenue models, tests, metric definitions in code, the dashboard and the Airflow schedule (see the [build guide](docs/build-guide.md)).
 
-## What it answers
-The CFO's [brief](docs/brief.md) asks for:
+## The business case
 
-1. Monthly MRR in EUR with a bridge (new, expansion, contraction, churn, reactivation) that reconciles to what was invoiced.
-2. Logo retention, GRR and NRR by signup cohort, as a heatmap.
-3. Churn rate by plan, country, billing interval, acquisition channel and early activation.
-4. Signup to trial to paid conversion, ARPA and a simple LTV by plan.
-5. Revenue at risk from failed payments and the dunning recovery rate.
-6. Plain-language questions ("What was NRR for Q1 cohorts on the Pro plan?") answered from the same metrics as the dashboard, with the SQL shown.
-7. A daily refresh nobody has to run by hand, with tests that block bad data.
+Fieldnote sells four plans (Free, Starter, Pro and Business), priced per seat and billed monthly or annually in Spain, the UK and the US. It's preparing to raise a Series B, and every investor asks for the same three numbers: MRR, net revenue retention and churn. Today Finance, Sales and Product each pull those numbers their own way and get different answers, which is a problem in front of investors and makes it hard to decide anything internally.
 
-Every metric has one written definition in [metrics.md](docs/metrics.md), and nothing goes on a dashboard without one.
+The CFO's [brief](docs/brief.md) asks for one version of the truth that refreshes itself and that their team can query without filing a ticket. It would count as a failure if there were still three MRR numbers, if a metric appeared on screen without a written definition, or if someone had to run the pipeline by hand.
+
+## Questions it answers
+
+**Revenue**
+- What is MRR this month in euros, and how much of the change came from new customers, upgrades, downgrades, cancellations and customers coming back?
+- Does MRR reconcile to what we invoiced?
+
+**Retention**
+- Of the customers who started paying in a given month, how many are still paying a year later?
+- How much of their revenue did we keep (gross revenue retention), and how much did it grow with upgrades (net revenue retention)?
+
+**Churn**
+- Which customers leave most often: by plan, country, monthly or annual billing, acquisition channel, and whether they set up their workspace properly in the first 14 days?
+
+**Growth and unit economics**
+- How many signups start a trial, and how many trials turn into paying customers?
+- What is the average revenue per account, and the lifetime value of a customer on each plan?
+
+**Failed payments**
+- How much revenue is at risk from failed card payments, and how much do payment retries recover?
+- How much MRR do we lose to failed payments compared with customers who choose to cancel?
+
+**Self-service**
+- Can the CFO ask "What was NRR for Q1 cohorts on the Pro plan?" in plain English and get the answer, with the SQL behind it, from the same definitions as the dashboard?
+
+Each of these metrics has one written definition in [metrics.md](docs/metrics.md), agreed before any model was built.
 
 ## How it's built
 
@@ -28,75 +47,37 @@ ECB exchange rates (real) ──┴─> Snowflake RAW ─> SILVER (notebooks) �
                     └──────────────────── orchestrated daily by Airflow ────────────────────┘
 ```
 
-**Stack:** Snowflake, dbt, Airflow, SQL, Python, Snowflake notebooks, dbt MetricFlow, Cortex Analyst, Streamlit, GitHub Actions (CI).
+| Step | What happens | Tools |
+|---|---|---|
+| Source data | A simulator writes daily billing (Stripe) and product usage (Segment) files, and real exchange rates come from the European Central Bank | Python |
+| Raw load | Files land in Snowflake exactly as delivered, with the file name and row kept for traceability | Snowflake, Python |
+| Cleaning | One clean table per source object: correct types, duplicates removed, nested lists split into their own tables | Snowflake notebooks, SQL |
+| Modeling | Subscription history, MRR per customer per month, then the marts behind each question: MRR bridge, retention cohorts, churn drivers, trial funnel, payments | dbt, SQL |
+| Testing | Data tests on every source and model, plus a check that MRR matches an answer key to the cent for every customer and month | dbt |
+| Metrics | Every metric defined once in code, used by both the dashboard and the plain-English questions | dbt MetricFlow, Snowflake Cortex Analyst |
+| Reporting | A dashboard with one page per question area, plus an "Ask the data" page | Streamlit in Snowflake |
+| Orchestration | A daily Airflow run loads, builds and tests everything, and alerts on failure. Pull requests are linted and tested before merging | Airflow, GitHub Actions |
 
-The parts worth a look:
+### Design decisions
 
-- **Data that behaves like the real thing.** Billing and product events are simulated in the shape of Stripe API objects and Segment track calls, with the problems real feeds have: daily re-deliveries of full objects, duplicates, late events, a schema change mid-history, grandfathered prices, prorations and failed payments. All 15 quirks are listed in [source-data.md](docs/source-data.md).
-- **MRR checked to the cent.** The simulator writes an answer key, and a reconciliation test compares the model's MRR to it for every customer and month.
-- **Currency handled on purpose.** Revenue is converted to EUR at the ECB month-end rate, and NRR and GRR use constant currency so exchange rate moves don't show up as expansion or churn.
-- **Access by role.** Separate roles and warehouses for loading, transforming and reporting, key-pair service users and a credit cap on spend.
+- **Data that behaves like the real thing.** The simulated data follows the shape of Stripe API objects and Segment events, with the problems real feeds have: daily re-deliveries of full records, duplicates, late events, a schema change mid-history, grandfathered prices, prorations and failed payments. All 15 are listed in [source-data.md](docs/source-data.md).
+- **MRR checked to the cent.** The simulator also writes an answer key, and a test compares the model's MRR to it for every customer and month.
+- **Currency handled on purpose.** Revenue is converted to euros at the month-end exchange rate, and retention uses a constant rate so currency moves don't look like upgrades or churn.
+- **Access by role.** Loading, transforming and reporting each have their own role and warehouse, service accounts use key pairs, and a monthly credit cap limits spend.
 
 ## Repo map
 
 | Folder | What's in it |
 |---|---|
-| `simulator/` | Deterministic Stripe and Segment data generator |
-| `ingestion/` | ECB rates download and the Snowflake loader |
-| `snowflake/` | Account setup (`setup.sql`) and the Silver notebook |
+| `simulator/` | Stripe and Segment data generator |
+| `ingestion/` | Exchange rate download and the Snowflake loader |
+| `snowflake/` | Account setup (`setup.sql`) and the cleaning notebook |
 | `dbt/` | dbt project: sources, intermediate models and marts |
 | `airflow/` | The daily DAG (phase 11) |
-| `docs/` | [Brief](docs/brief.md), [metric definitions](docs/metrics.md), [source data](docs/source-data.md), [build guide](docs/build-guide.md) |
+| `docs/` | [Brief](docs/brief.md), [metric definitions](docs/metrics.md), [source data](docs/source-data.md), [build guide](docs/build-guide.md), [setup](docs/setup.md) |
 
-Billing and product data are simulated. Exchange rates are real, from the ECB.
+Billing and product data are simulated. Exchange rates are real.
 
 ## Run it yourself
 
-### Quickstart: get the raw tables loaded
-
-**1. Python environment**
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-**2. Key pairs for the service users**
-```bash
-mkdir -p keys
-for u in loader dbt; do
-  openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out keys/${u}_key.p8 -nocrypt
-  openssl rsa -in keys/${u}_key.p8 -pubout -out keys/${u}_key.pub
-done
-```
-
-**3. Snowflake.** Create a trial account (Enterprise, AWS, in a region where Cortex Analyst is available). Open `snowflake/setup.sql` in a Snowsight worksheet, replace the placeholders with your username and the two public keys (`keys/*.pub` without the BEGIN/END lines), and run it all.
-
-**4. Generate and load data**
-```bash
-python simulator/simulate.py --backfill   # Stripe + Segment files, Jan 2024 to yesterday
-python ingestion/fx.py --backfill         # ECB rates
-cp .env.example .env                      # then fill in SNOWFLAKE_ACCOUNT
-set -a; source .env; set +a
-python ingestion/load.py
-```
-
-**5. Check** (in Snowsight)
-```sql
-SELECT 'stripe.customers' AS t, COUNT(*) FROM RAW.STRIPE.CUSTOMERS
-UNION ALL SELECT 'stripe.subscriptions', COUNT(*) FROM RAW.STRIPE.SUBSCRIPTIONS
-UNION ALL SELECT 'stripe.invoices', COUNT(*) FROM RAW.STRIPE.INVOICES
-UNION ALL SELECT 'stripe.charges', COUNT(*) FROM RAW.STRIPE.CHARGES
-UNION ALL SELECT 'stripe.refunds', COUNT(*) FROM RAW.STRIPE.REFUNDS
-UNION ALL SELECT 'stripe.prices', COUNT(*) FROM RAW.STRIPE.PRICES
-UNION ALL SELECT 'stripe.products', COUNT(*) FROM RAW.STRIPE.PRODUCTS
-UNION ALL SELECT 'stripe.coupons', COUNT(*) FROM RAW.STRIPE.COUPONS
-UNION ALL SELECT 'segment.tracks', COUNT(*) FROM RAW.SEGMENT.TRACKS
-UNION ALL SELECT 'ecb.rates', COUNT(*) FROM RAW.ECB.RATES
-UNION ALL SELECT 'ground_truth.mrr_monthly', COUNT(*) FROM RAW.GROUND_TRUTH.MRR_MONTHLY;
-```
-
-### Daily refresh
-```bash
-python simulator/simulate.py && python ingestion/fx.py && python ingestion/load.py
-```
-The simulator replays deterministically from 2024-01-01 and writes only yesterday's files; the loader skips files already loaded. If you miss days, run the simulator once with `--backfill`. From phase 11, an Airflow DAG runs this chain plus `dbt build` and `dbt source freshness` every day.
+The setup steps and commands are in [docs/setup.md](docs/setup.md).

@@ -13,7 +13,7 @@ Read `brief.md`, `metrics.md` and `source-data.md` before phase 2. They are the 
 
 **Tasks**
 1. Create a Snowflake trial: Enterprise edition, AWS. Before choosing the region, check that Cortex Analyst is available there (Snowflake docs, "Cortex Analyst" > availability), because phase 10 needs it.
-2. Generate two key pairs (README has the commands) and run `snowflake/setup.sql` in a Snowsight worksheet.
+2. Generate two key pairs (`docs/setup.md` has the commands) and run `snowflake/setup.sql` in a Snowsight worksheet.
 3. Read `setup.sql` top to bottom until you can explain every block.
 
 **Done when:** `SHOW GRANTS TO ROLE TRANSFORMER` lists SELECT on RAW tables and CREATE SCHEMA on SILVER and GOLD.
@@ -23,9 +23,9 @@ Read `brief.md`, `metrics.md` and `source-data.md` before phase 2. They are the 
 ## Phase 1 — Raw load (done for you, 1 h to run)
 **Goal:** all raw tables populated.
 
-**Tasks:** follow the README quickstart: simulator backfill, ECB backfill, `load.py`. Then explore in Snowsight: `SELECT RAW FROM RAW.STRIPE.SUBSCRIPTIONS LIMIT 20`, and click into the JSON.
+**Tasks:** follow the quickstart in `docs/setup.md`: simulator backfill, ECB backfill, `load.py`. Then explore in Snowsight: `SELECT RAW FROM RAW.STRIPE.SUBSCRIPTIONS LIMIT 20`, and click into the JSON.
 
-**Done when:** the row-count query in the README returns non-zero counts for every table.
+**Done when:** the row-count query in `docs/setup.md` returns non-zero counts for every table.
 
 **Interview talking point:** "Raw lands as VARIANT exactly as delivered, with the file name and row number. Re-running the load is safe because COPY INTO skips files it has already loaded."
 
