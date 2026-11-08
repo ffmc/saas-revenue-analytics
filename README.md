@@ -1,8 +1,10 @@
 # Fieldnote SaaS revenue analytics
 
-Fieldnote is a fictional B2B SaaS getting ready for a Series B, and today Finance, Sales and Product each report a different MRR. This project builds one version of the truth on Snowflake and dbt: MRR and its movements, cohort retention, churn drivers and failed payments, all from governed metric definitions that refresh daily and can be queried in plain language.
+A portfolio project that builds the revenue reporting for Fieldnote, a fictional company that sells team-planning software on monthly and annual subscriptions. Its Finance, Sales and Product teams each report a different monthly recurring revenue (MRR), so the goal is one set of numbers everyone uses: how much recurring revenue comes in each month, why it went up or down, and which customers stay or leave.
 
-**Status: in progress.** The Snowflake setup, raw load, Silver layer and dbt sources are built. The subscription history, MRR models, tests, semantic layer, dashboard and daily automation are next (see the [build guide](docs/build-guide.md)).
+The raw billing and product data lands in Snowflake, dbt cleans, models and tests it, and Airflow runs the whole refresh every day. The result is a finance dashboard and a way to ask questions in plain English, both reading from the same metric definitions.
+
+**Status: in progress.** Done so far: Snowflake setup, raw data load, a cleaned layer and the dbt project connected to it. Next: the revenue models, tests, metric definitions in code, the dashboard and the Airflow schedule (see the [build guide](docs/build-guide.md)).
 
 ## What it answers
 The CFO's [brief](docs/brief.md) asks for:
@@ -23,9 +25,10 @@ Every metric has one written definition in [metrics.md](docs/metrics.md), and no
 Stripe + Segment simulator ─┐
 ECB exchange rates (real) ──┴─> Snowflake RAW ─> SILVER (notebooks) ─> dbt intermediate + marts (GOLD)
                                                                          └─> semantic layer ─> Streamlit app + Cortex Analyst
+                    └──────────────────── orchestrated daily by Airflow ────────────────────┘
 ```
 
-**Stack:** Snowflake, dbt, SQL, Python, Snowflake notebooks, dbt MetricFlow, Cortex Analyst, Streamlit, GitHub Actions.
+**Stack:** Snowflake, dbt, Airflow, SQL, Python, Snowflake notebooks, dbt MetricFlow, Cortex Analyst, Streamlit, GitHub Actions (CI).
 
 The parts worth a look:
 
@@ -42,6 +45,7 @@ The parts worth a look:
 | `ingestion/` | ECB rates download and the Snowflake loader |
 | `snowflake/` | Account setup (`setup.sql`) and the Silver notebook |
 | `dbt/` | dbt project: sources, intermediate models and marts |
+| `airflow/` | The daily DAG (phase 11) |
 | `docs/` | [Brief](docs/brief.md), [metric definitions](docs/metrics.md), [source data](docs/source-data.md), [build guide](docs/build-guide.md) |
 
 Billing and product data are simulated. Exchange rates are real, from the ECB.
@@ -95,4 +99,4 @@ UNION ALL SELECT 'ground_truth.mrr_monthly', COUNT(*) FROM RAW.GROUND_TRUTH.MRR_
 ```bash
 python simulator/simulate.py && python ingestion/fx.py && python ingestion/load.py
 ```
-The simulator replays deterministically from 2024-01-01 and writes only yesterday's files; the loader skips files already loaded. If you miss days, run the simulator once with `--backfill`.
+The simulator replays deterministically from 2024-01-01 and writes only yesterday's files; the loader skips files already loaded. If you miss days, run the simulator once with `--backfill`. From phase 11, an Airflow DAG runs this chain plus `dbt build` and `dbt source freshness` every day.

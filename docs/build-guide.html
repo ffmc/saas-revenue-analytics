@@ -379,25 +379,29 @@ Read `brief.md`, `metrics.md` and `source-data.md` before phase 2. They are the 
 
 **Done when:** each brief objective 1–6 has a page that answers it, and the MRR on screen matches the ground truth for the latest month.
 
-## Phase 11 — Automation and CI (week 9, ~6 h)
-**Goal:** daily refresh with nobody touching it, and no broken model reaching production.
+## Phase 11 — Airflow orchestration and CI (week 9, ~8 h)
+**Goal:** daily refresh with nobody touching it, orchestrated by Airflow, and no broken model reaching production.
 
-**Learn first:** GitHub Actions basics; dbt `state:modified` selection (optional).
+**Learn first:** Airflow DAGs, tasks, retries and schedules (https://airflow.apache.org/docs/apache-airflow/stable/core-concepts/dags.html); running Airflow locally with Docker (Astro CLI or the official `docker-compose.yaml`); GitHub Actions basics; dbt `state:modified` selection (optional).
 
 **Tasks**
-1. Push the repo to GitHub (public). Add secrets: account, both private keys.
-2. `.github/workflows/daily.yml` on a schedule:
-   - `simulate.py` (no flags = yesterday), `fx.py`, `load.py`
-   - `dbt build --target prod`, then `dbt source freshness`
-   - on failure, open a GitHub issue (or email)
-3. `.github/workflows/ci.yml` on pull requests: `sqlfluff lint` (dbt templater) and `dbt build --target ci`.
-4. `.github/workflows/docs.yml`: `dbt docs generate` and publish `target/` to GitHub Pages.
+1. Run Airflow locally in Docker. Add a Snowflake connection and mount `keys/` read-only.
+2. `airflow/dags/fieldnote_daily.py`, scheduled daily:
+   - `simulate` (no flags = yesterday), `fx`, `load` as separate tasks
+   - `dbt_build` (`dbt build --target prod`), then `dbt_source_freshness`
+   - retries on the ingestion tasks, and an alert (email or Slack webhook) on failure
+3. Push the repo to GitHub (public). Add secrets: account, the dbt private key.
+4. `.github/workflows/ci.yml` on pull requests: `sqlfluff lint` (dbt templater) and `dbt build --target ci`.
+5. `.github/workflows/docs.yml`: `dbt docs generate` and publish `target/` to GitHub Pages.
 
 **Traps**
-- The simulator replays from 2024 every run (a few seconds), and only writes yesterday's files. If a day is missed, run it once with `--backfill`; the loader skips files already loaded.
-- Never commit keys. Write the key from a secret to a temp file in the workflow.
+- The simulator replays from 2024 every run (a few seconds), and only writes yesterday's files. If a day is missed, run it once with `--backfill`; the loader skips files already loaded. Turn off Airflow `catchup` so it doesn't try to run every day since the start date.
+- Make each task safe to re-run: Airflow retries will run it again.
+- Never commit keys. Keep them out of the DAG code and the Airflow image.
 
-**Done when:** 3 scheduled runs succeed unattended, and a PR with a deliberately failing test is blocked.
+**Done when:** the DAG runs green 3 days in a row without you touching it, a failing dbt test stops the run and sends the alert, and a PR with a deliberately failing test is blocked.
+
+**Interview talking point:** "Airflow runs ingestion and dbt as separate tasks with retries, so a flaky load retries on its own and a failed test stops bad data before it reaches the dashboard. CI on pull requests catches broken models before they're merged."
 
 ## Phase 12 — Showcase (week 10, ~5 h)
 **Goal:** someone can understand the project in five minutes without running anything.
